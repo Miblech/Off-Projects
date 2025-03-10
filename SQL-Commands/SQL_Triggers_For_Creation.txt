@@ -1,0 +1,76 @@
+DELIMITER //
+
+CREATE PROCEDURE insert_role_with_modules(
+    IN role_name VARCHAR(45),
+    IN created_by VARCHAR(255),
+    IN updated_by VARCHAR(255)
+)
+BEGIN
+    DECLARE role_id INT;
+	
+    INSERT INTO role (name, created_by, updated_by, created_date, updated_date)
+    VALUES (role_name, created_by, updated_by, NOW(), NOW());
+
+    SET role_id = LAST_INSERT_ID();
+
+    INSERT INTO module_role (role_id, module_id, active, created_by, updated_by, created_date, updated_date)
+    SELECT role_id, id, TRUE, created_by, updated_by, NOW(), NOW() FROM module;
+
+END //
+
+DELIMITER //
+
+CREATE TRIGGER after_role_insert
+AFTER INSERT ON role
+FOR EACH ROW
+BEGIN
+	DECLARE module_id INT;
+	
+	DECLARE module_cursor CURSOR FOR SELECT id FROM module;
+	
+	DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+	
+	OPEN module_cursor;
+	
+	read_loop: LOOP
+		FETCH module_cursor INTO module_id;
+		IF done THEN
+			LEAVE read_loop;
+			END IF;
+			
+			INSERT INTO module_role(role_id, module_id, active, created_by, updated_by, created_date, updated_date)
+			VALUES (NEW.id, module_id, TRUE, 'ADMIN', NULL, NOW(), NOW());
+	END LOOP;
+	
+	CLOSE module_cursor;
+END //
+
+DELIMITER;
+
+
+DELIMITER //
+
+CREATE TRIGGER AFTER_MODULE_INSERT
+AFTER INSERT ON module
+FOR EACH ROW
+BEGIN
+	DECLARE done INT DEFAULT 0;
+    DECLARE role_id INT;
+    DECLARE role_cursor CURSOR FOR SELECT id FROM role;
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+    
+    OPEN role_cursor;
+    
+    read_loop: LOOP
+		FETCH role_cursor INTO role_id;
+        IF done THEN
+			LEAVE read_loop;
+		END IF;
+        
+        INSERT INTO module_role(role_id, module_id, active, created_by, updated_by, created_date, updated_date)
+        VALUES (role_id, NEW.id, FALSE, 'ADMIN', NULL, NOW(), NOW());
+	END LOOP;
+    
+    CLOSE role_cursor;
+END //
